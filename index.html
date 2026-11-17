@@ -225,7 +225,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           <span class="label">Engineer · Kochi, Kerala</span>
           <h1>Omar Sheriff</h1>
           <p class="role">ECE engineer building where <b>hardware meets AI</b>: embedded systems, edge models and the software around them.</p>
-          <p class="intro">A rover that diagnoses tomato leaves, a sign-language translator that speaks with emotion, an MRI segmentation model squeezed onto an FPGA. Currently testing connected devices as a QA engineer at Transight.</p>
+          <p class="intro">A rover that diagnoses tomato leaves, a sign-language translator that speaks with emotion, a prototype MRI cancer model squeezed onto an FPGA. Currently testing connected devices as a QA engineer at Transight.</p>
           <div class="cta">
             <a class="btn primary" href="https://omarsheriffh-sentisign.hf.space" target="_blank" rel="noopener">Try SentiSign Live <span aria-hidden="true">↗</span></a>
             <a class="btn" href="#projects">View Projects <span aria-hidden="true">↓</span></a>
@@ -352,20 +352,22 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           <div class="spec-top">
             <span class="pn">P-03</span>
             <h3 translate="no">SegNet-Lite</h3>
-            <span class="chip done">Team of 3 · completed</span>
+            <span class="chip wip">Team of 3 · prototype</span>
           </div>
           <div class="spec-body">
             <div class="spec-desc">
-              <p>On-device detection of clinically significant prostate cancer from MRI, running on a Xilinx ZCU104 FPGA. A two-stage cascade first segments the prostate gland, then crops to that region and segments lesions inside it, which cuts false positives from whole-pelvis analysis.</p>
+              <p>A prototype that colours in likely prostate cancer on MRI scans, running on a hand-sized Xilinx ZCU104 FPGA board inside the hospital. Two small models work in a row: the first finds the prostate, the second searches only inside a 64&nbsp;×&nbsp;64 window there, which avoids false alarms from the rest of the pelvis.</p>
               <p>The model is INT8-quantised for the FPGA’s DPU through Vitis AI, so inference needs no cloud and patient data never leaves the hospital. The problem came from a senior radiology consultant at Rajagiri Hospital; built with Arun K and Adarsh Nair as Team GenHacks.</p>
+              <p class="limit">Honest limit: the precision figure was measured on the training scans, and the two stages are not yet joined end to end. It is a research prototype, not clinically validated.</p>
               <div class="tags"><span class="tag">Xilinx ZCU104</span><span class="tag">Vitis AI · DPU</span><span class="tag">INT8</span><span class="tag">Dice + Focal loss</span><span class="tag">PI-CAI dataset</span><span class="tag">Python</span></div>
             </div>
             <div class="spec-data">
-              <div class="row"><span class="k">Lesion precision</span><span class="n">≈93–95%</span></div>
-              <div class="row"><span class="k">Inference</span><span class="n">&lt;&nbsp;20&nbsp;ms</span></div>
+              <div class="row"><span class="k">Lesion precision (on training scans)</span><span class="n">≈93–95%</span></div>
+              <div class="row"><span class="k">Time per scan on the FPGA</span><span class="n">&lt;&nbsp;20&nbsp;ms</span></div>
               <div class="row"><span class="k">Memory saved by INT8</span><span class="n">75%</span></div>
               <div class="row"><span class="k">bpMRI scans in dataset</span><span class="n">1,500</span></div>
               <div class="links">
+                <a class="btn primary" href="https://github.com/filaltaxi/SEGNET-LITE/blob/main/EXPLAINED.md" target="_blank" rel="noopener">Plain-language explainer <span aria-hidden="true">↗</span></a>
                 <a class="btn" href="https://github.com/filaltaxi/SEGNET-LITE" target="_blank" rel="noopener">Code <span aria-hidden="true">↗</span></a>
               </div>
             </div>
@@ -373,9 +375,9 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           <div class="flow" aria-label="Signal flow">
             <span class="label">Signal flow</span>
             <span class="blk">T2W · ADC · HBV MRI</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Gland segmentation</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">ROI crop</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Lesion segmentation</span><span class="arr" aria-hidden="true">→</span>
+            <span class="blk">Find the prostate</span><span class="arr" aria-hidden="true">→</span>
+            <span class="blk">Zoom in, 64&nbsp;px</span><span class="arr" aria-hidden="true">→</span>
+            <span class="blk">Find the lesion</span><span class="arr" aria-hidden="true">→</span>
             <span class="blk">Mask on FPGA</span>
           </div>
         </article>
