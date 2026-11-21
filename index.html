@@ -16,8 +16,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  try { var t = localStorage.getItem('os-theme'); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  document.documentElement.classList.add('js');
+</script>
 <style>
-/* Layout idea: a set of engineering drawing sheets on graph paper. Hero = drawing title block; each section = a numbered sheet; projects = spec sheets with a signal-flow strip. */
+/* Layout idea: a set of engineering drawing sheets on graph paper that come alive. Hero = drawing title block with a live circuit; each section = a numbered sheet whose rule draws itself; projects = spec sheets with clickable signal-flow strips. */
 :root {
   --paper: #f3f6f9;
   --grid: #dbe3ec;
@@ -30,6 +34,7 @@
   --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --font-body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --ease: cubic-bezier(.2, .7, .2, 1);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -47,7 +52,6 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
 body {
   margin: 0;
   background-color: var(--paper);
@@ -55,10 +59,12 @@ body {
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 24px 24px;
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 17px;
   line-height: 1.6;
+  transition: background-color .4s, color .4s;
 }
 a { color: var(--ink); text-decoration-color: var(--copper); text-underline-offset: 3px; }
 a:hover { color: var(--copper); }
@@ -66,102 +72,165 @@ a:hover { color: var(--copper); }
 h1, h2, h3 { font-family: var(--font-display); line-height: 1.15; text-wrap: balance; margin: 0; }
 .mono { font-family: var(--font-mono); }
 .label { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+button { font: inherit; }
 
-.skip { position: absolute; left: 12px; top: -60px; z-index: 10; background: var(--ink); color: var(--paper); padding: 8px 12px; font-family: var(--font-mono); font-size: 13px; }
+.skip { position: absolute; left: 12px; top: -60px; z-index: 20; background: var(--ink); color: var(--paper); padding: 8px 12px; font-family: var(--font-mono); font-size: 13px; }
 .skip:focus { top: 8px; color: var(--paper); }
 [id] { scroll-margin-top: 72px; }
 .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+main, footer { position: relative; z-index: 1; }
+
+/* cursor glow on the graph paper */
+.glow {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity .4s;
+  background-image:
+    linear-gradient(var(--copper) 1px, transparent 1px),
+    linear-gradient(90deg, var(--copper) 1px, transparent 1px);
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(170px circle at var(--mx, -999px) var(--my, -999px), rgba(0,0,0,.5), transparent 72%);
+  mask-image: radial-gradient(170px circle at var(--mx, -999px) var(--my, -999px), rgba(0,0,0,.5), transparent 72%);
+}
+.glowing .glow { opacity: 1; }
 
 /* top bar */
-.bar { position: sticky; top: 0; z-index: 5; background: var(--paper); border-bottom: 1px solid var(--line); }
+.bar { position: sticky; top: 0; z-index: 5; background: var(--paper); border-bottom: 1px solid var(--line); transition: background-color .4s; }
 .bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 56px; }
-.bar .id { font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: .06em; }
-.bar nav { display: flex; gap: 18px; flex-wrap: wrap; }
-.bar nav a { font-family: var(--font-mono); font-size: 13px; text-decoration: none; color: var(--muted); }
-.bar nav a:hover { color: var(--copper); }
-@media (max-width: 640px) { .bar .id { display: none; } .bar nav { gap: 14px; flex-wrap: nowrap; overflow-x: auto; width: 100%; justify-content: space-between; } }
+.bar .id { font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: .06em; white-space: nowrap; }
+.bar nav { display: flex; gap: 18px; min-width: 0; }
+.bar nav a { font-family: var(--font-mono); font-size: 13px; text-decoration: none; color: var(--muted); white-space: nowrap; position: relative; padding: 4px 0; }
+.bar nav a::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--copper); transform: scaleX(0); transform-origin: left; transition: transform .3s var(--ease); }
+.bar nav a:hover, .bar nav a[aria-current="true"] { color: var(--ink); }
+.bar nav a:hover::after, .bar nav a[aria-current="true"]::after { transform: scaleX(1); }
+.tools { display: flex; gap: 8px; flex-shrink: 0; }
+.tool {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--ink); background: var(--panel);
+  border: 1.5px solid var(--ink); padding: 5px 9px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center;
+  touch-action: manipulation; transition: background-color .2s, color .2s, border-color .2s;
+}
+.tool:hover { background: var(--ink); color: var(--paper); }
+.tool .knob { display: inline-block; width: 22px; height: 12px; border: 1.5px solid currentColor; border-radius: 8px; position: relative; }
+.tool .knob::after { content: ""; position: absolute; top: 1px; left: 1px; width: 7px; height: 7px; border-radius: 50%; background: currentColor; transition: transform .3s var(--ease); }
+.tool[aria-pressed="true"] .knob::after { transform: translateX(10px); }
+.progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--copper); transform: scaleX(0); transform-origin: left; }
+@media (max-width: 720px) {
+  .bar .id, .tool .tl { display: none; }
+  .bar .wrap { gap: 10px; }
+  .bar nav { gap: 14px; overflow-x: auto; flex: 1; scrollbar-width: none; padding-right: 18px; -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent); mask-image: linear-gradient(90deg, #000 80%, transparent); }
+}
 
 /* title block hero */
 .hero { padding: 56px 0 40px; }
-.titleblock {
-  border: 2px solid var(--ink);
-  background: var(--panel);
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-}
+.titleblock { border: 2px solid var(--ink); background: var(--panel); display: grid; grid-template-columns: 1.5fr 1fr; transition: background-color .4s; }
 .tb-main { padding: 32px 32px 28px; border-right: 2px solid var(--ink); display: flex; flex-direction: column; gap: 18px; }
 .tb-main h1 { font-size: clamp(40px, 7vw, 76px); font-weight: 800; letter-spacing: -.02em; }
-.tb-main .role { font-size: 20px; max-width: 36ch; color: var(--ink); }
-.tb-main .role b { color: var(--copper); font-weight: 600; }
+.tb-main h1 .w { display: inline-block; white-space: nowrap; }
+.tb-main h1 .ch { display: inline-block; }
+.js .tb-main h1 .ch { animation: rise .8s var(--ease) both; animation-delay: calc(var(--i) * 40ms + 100ms); }
+@keyframes rise { from { transform: translateY(.45em) rotate(4deg); opacity: 0; } }
+.tb-main .role { font-size: 20px; max-width: 36ch; color: var(--ink); margin: 0; }
+.tb-main .role b {
+  color: var(--copper); font-weight: 600;
+  background: linear-gradient(var(--copper), var(--copper)) no-repeat 0 100% / 100% 2px;
+}
+.js .tb-main .role b { animation: underline 1s .9s var(--ease) both; }
+@keyframes underline { from { background-size: 0% 2px; } }
 .tb-main .intro { color: var(--muted); max-width: 60ch; margin: 0; }
 .cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 .btn {
-  font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: .04em;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: .04em; color: var(--ink);
   padding: 10px 14px; border: 1.5px solid var(--ink); text-decoration: none; display: inline-flex; gap: 8px; align-items: center;
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  background: linear-gradient(var(--ink), var(--ink)) no-repeat left / 0% 100%;
+  transition: background-size .3s var(--ease), color .3s, border-color .3s;
 }
-.btn.primary { background: var(--ink); color: var(--paper); }
-.btn.primary:hover { background: var(--copper); border-color: var(--copper); color: #fff; }
-.btn:hover { background: var(--ink); color: var(--paper); }
-.tb-cells { display: grid; grid-template-columns: 1fr 1fr; }
+.btn:hover { background-size: 100% 100%; color: var(--paper); }
+.btn.primary { color: var(--paper); background: linear-gradient(var(--copper), var(--copper)) no-repeat left / 0% 100%, var(--ink); }
+.btn.primary:hover { background-size: 100% 100%, auto; border-color: var(--copper); color: #fff; }
+.btn .ar { display: inline-block; transition: transform .3s var(--ease); }
+.btn:hover .ar { transform: translate(2px, -2px); }
+.btn:hover .ar.down { transform: translateY(3px); }
+
+.tb-cells { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
 .cell { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
 .cell:nth-child(odd) { border-right: 1px solid var(--line); }
 .cell.wide { grid-column: span 2; border-right: 0; }
-.cell .v { font-family: var(--font-mono); font-size: 14px; font-weight: 500; }
-.cell:last-child, .cell:nth-last-child(2):not(.wide) { border-bottom: 0; }
+.cell:last-child { border-bottom: 0; }
+.cell .v { font-family: var(--font-mono); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.scope { padding: 0; border-bottom: 2px solid var(--ink); }
+.scope-head { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px 0; }
+.scope-head .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scope-head .label:last-child { color: var(--copper); text-transform: none; letter-spacing: .02em; }
+.scope canvas { display: block; width: 100%; height: 210px; touch-action: pan-y; cursor: crosshair; }
 .status { display: inline-flex; align-items: center; gap: 8px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); position: relative; }
+.dot::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--ok); animation: ping 2s ease-out infinite; }
+@keyframes ping { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.8); opacity: 0; } }
 @media (max-width: 820px) {
   .titleblock { grid-template-columns: 1fr; }
   .tb-main { border-right: 0; border-bottom: 2px solid var(--ink); padding: 24px 20px; }
 }
 
-/* sheets */
+/* sheets: the rule under each heading draws itself, and a signal runs along it */
 .sheet { padding: 40px 0; }
-.sheet-head { display: flex; align-items: baseline; gap: 16px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 28px; }
+.sheet-head { display: flex; align-items: baseline; gap: 16px; padding-bottom: 10px; margin-bottom: 28px; position: relative; }
+.sheet-head::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--ink); transform-origin: left; transition: transform 1s cubic-bezier(.6, 0, .2, 1); }
+.js .sheet-head:not(.in)::after { transform: scaleX(0); }
+.sheet-head::before { content: ""; position: absolute; bottom: -3px; left: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--copper); opacity: 0; z-index: 1; }
+.sheet-head.in::before { animation: run 1.6s .35s ease-in-out both; }
+@keyframes run { 0% { left: 0; opacity: 0; } 10%, 85% { opacity: 1; } 100% { left: calc(100% - 8px); opacity: 0; } }
 .sheet-head .no { font-family: var(--font-mono); font-size: 13px; color: var(--copper); font-weight: 600; white-space: nowrap; }
 .sheet-head h2 { font-size: clamp(26px, 4vw, 36px); font-weight: 700; }
 .sheet-head .note { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right; }
 @media (max-width: 640px) { .sheet-head { flex-wrap: wrap; } .sheet-head .note { margin-left: 0; text-align: left; width: 100%; } }
 
+/* reveal: content is visible at rest, it only settles into place */
+.js .reveal { transition: transform .8s var(--ease), opacity .8s var(--ease); }
+.js .reveal:not(.in) { transform: translateY(28px); opacity: .2; }
+
 /* about */
 .about { display: grid; grid-template-columns: 1.3fr 1fr; gap: 32px; align-items: start; }
 .about p { margin: 0 0 14px; max-width: 62ch; }
-.belief { border: 1.5px dashed var(--line); background: var(--panel); padding: 20px; }
+.belief { border: 1.5px dashed var(--line); background: var(--panel); padding: 20px; transition: border-color .3s, background-color .4s; }
+.belief:hover { border-color: var(--copper); }
 .belief .eq { font-family: var(--font-mono); font-size: 15px; line-height: 1.8; margin: 8px 0 0; }
 .belief .eq span { color: var(--copper); font-weight: 600; }
+.belief .eq .cursor { display: inline-block; width: .55em; height: 1.1em; background: var(--copper); vertical-align: -3px; margin-left: 4px; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
 @media (max-width: 820px) { .about { grid-template-columns: 1fr; } }
 
 /* projects */
 .projects { display: grid; gap: 28px; }
 .spec { background: var(--panel); border: 1.5px solid var(--ink); }
+@media (hover: hover) {
+  .js .spec.in { transition: transform .3s var(--ease), box-shadow .3s var(--ease), background-color .4s; }
+  .spec.in:hover { transform: translate(-4px, -4px); box-shadow: 6px 6px 0 var(--copper); }
+}
 .spec-top { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; padding: 14px 20px; border-bottom: 1.5px solid var(--ink); }
 .spec-top .pn { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--paper); background: var(--ink); padding: 3px 8px; }
 .spec-top h3 { font-size: 24px; font-weight: 700; }
-.chip { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; border: 1px solid currentColor; padding: 3px 8px; white-space: nowrap; }
+.chip { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; border: 1px solid currentColor; padding: 3px 8px; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
 .chip.live { color: var(--ok); }
+.chip.live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1.4s steps(1) infinite; }
 .chip.wip { color: var(--copper); }
-.chip.done { color: var(--muted); }
 .spec-body { display: grid; grid-template-columns: 1.4fr 1fr; }
 .spec-desc { padding: 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
 .spec-desc p { margin: 0; max-width: 62ch; }
 .spec-desc .limit { font-size: 15px; color: var(--muted); border-left: 3px solid var(--copper); padding-left: 12px; }
 .spec-data { display: flex; flex-direction: column; }
-.row { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--line); align-items: baseline; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--line); align-items: baseline; transition: background-color .2s; }
+.row:hover { background: color-mix(in srgb, var(--copper) 8%, transparent); }
 .row .k { font-size: 14px; color: var(--muted); }
 .row .n { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .spec-data .hint { padding: 0 20px 14px; margin: 0; font-size: 13px; color: var(--muted); }
 .spec-data .links { padding: 14px 20px 10px; display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
 .figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); border-top: 1.5px solid var(--ink); }
-.figs figure { margin: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
-.figs img { display: block; width: 100%; height: auto; }
-.figs figcaption { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding: 8px 20px 10px; }
-.flow { border-top: 1.5px solid var(--ink); padding: 14px 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; overflow-x: auto; }
-.flow .label { margin-right: 6px; }
-.blk { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--ink); padding: 4px 8px; background: var(--paper); white-space: nowrap; }
-.arr { font-family: var(--font-mono); color: var(--copper); font-weight: 600; }
+.figs figure { margin: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); overflow: hidden; }
+.figs img { display: block; width: 100%; height: auto; transition: transform .6s var(--ease); }
+.figs figure:hover img { transform: scale(1.03); }
+.figs figcaption { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding: 8px 20px 10px; background: var(--panel); position: relative; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); border: 1px solid var(--line); padding: 2px 8px; }
+.tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); border: 1px solid var(--line); padding: 2px 8px; transition: border-color .2s, color .2s; }
+.tag:hover { border-color: var(--copper); color: var(--ink); }
 @media (max-width: 820px) {
   .spec-body { grid-template-columns: 1fr; }
   .spec-desc { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -169,41 +238,98 @@ h1, h2, h3 { font-family: var(--font-display); line-height: 1.15; text-wrap: bal
   .spec-top .chip { grid-column: span 2; justify-self: start; }
 }
 
+/* clickable signal flows */
+.flow { border-top: 1.5px solid var(--ink); padding: 14px 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.run {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: .03em;
+  background: var(--ink); color: var(--paper); border: 1px solid var(--ink); padding: 4px 10px; margin-right: 6px; cursor: pointer;
+  touch-action: manipulation; transition: background-color .2s, border-color .2s;
+}
+.run:hover { background: var(--copper); border-color: var(--copper); }
+.blk {
+  font-family: var(--font-mono); font-size: 12px; color: var(--ink); border: 1px solid var(--ink); padding: 4px 8px; background: var(--paper);
+  white-space: nowrap; cursor: pointer; touch-action: manipulation;
+  transition: background-color .25s, color .25s, border-color .25s, transform .15s, box-shadow .25s;
+}
+.blk:hover { border-color: var(--copper); transform: translateY(-2px); }
+.blk.on { border-color: var(--copper); box-shadow: 0 0 0 2px color-mix(in srgb, var(--copper) 22%, transparent); }
+.blk.cur { background: var(--copper); border-color: var(--copper); color: var(--panel); }
+.arr { font-family: var(--font-mono); font-weight: 600; color: var(--line); display: inline-block; transition: color .2s; }
+.arr.lit { color: var(--copper); animation: zap .45s var(--ease); }
+@keyframes zap { 0% { transform: translateX(-4px) scale(1.5); } 100% { transform: none; } }
+.flow-tip { margin: 0; padding: 10px 20px 14px; font-size: 14px; color: var(--muted); border-top: 1px dashed var(--line); min-height: 3.4em; }
+.flow-tip strong { color: var(--ink); font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+.flow-tip.fresh { animation: tipin .35s var(--ease); }
+@keyframes tipin { from { transform: translateY(4px); opacity: .3; } }
+
 .minor { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 28px; }
 .mini { border: 1px solid var(--line); background: var(--panel); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
 .mini h4 { margin: 0; font-family: var(--font-display); font-size: 17px; }
 .mini p { margin: 0; font-size: 15px; color: var(--muted); }
 
-/* experience */
-.timeline { display: grid; gap: 0; border-left: 2px solid var(--ink); margin-left: 6px; }
+/* experience: the line draws down the page */
+.timeline { display: grid; gap: 0; position: relative; margin-left: 6px; padding-left: 2px; }
+.timeline::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--ink); transform-origin: top; transition: transform 1.4s cubic-bezier(.6, 0, .2, 1); }
+.js .timeline:not(.in)::before { transform: scaleY(0); }
 .job { position: relative; padding: 0 0 26px 26px; display: grid; grid-template-columns: 200px 1fr; gap: 16px; }
 .job:last-child { padding-bottom: 0; }
-.job::before { content: ""; position: absolute; left: -8px; top: 6px; width: 14px; height: 14px; background: var(--paper); border: 2px solid var(--ink); }
+.job::before { content: ""; position: absolute; left: -8px; top: 6px; width: 14px; height: 14px; background: var(--paper); border: 2px solid var(--ink); transition: transform .3s var(--ease), background-color .3s; }
+.job:hover::before { transform: rotate(45deg); background: var(--copper); border-color: var(--copper); }
 .job.now::before { background: var(--copper); border-color: var(--copper); }
+.job.now::after { content: ""; position: absolute; left: -12px; top: 2px; width: 22px; height: 22px; border: 2px solid var(--copper); animation: ping 2.2s ease-out infinite; }
 .job .when { font-family: var(--font-mono); font-size: 13px; color: var(--muted); padding-top: 3px; }
 .job h3 { font-size: 20px; font-weight: 700; }
 .job .org { color: var(--muted); font-size: 15px; }
 @media (max-width: 640px) { .job { grid-template-columns: 1fr; gap: 2px; } }
 
-.edu { margin-top: 32px; border: 1.5px solid var(--ink); background: var(--panel); padding: 18px 20px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: center; }
-.edu h3 { font-size: 20px; }
-
-
 /* contact */
-.contact { border: 2px solid var(--ink); background: var(--ink); color: var(--paper); padding: 32px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: center; }
+.contact { border: 2px solid var(--ink); background: var(--ink); color: var(--paper); padding: 32px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: center; transition: background-color .4s, color .4s; }
 .contact h2 { font-size: clamp(26px, 4vw, 38px); }
 .contact p { margin: 10px 0 0; opacity: .85; max-width: 50ch; }
 .contact .links { display: flex; flex-direction: column; gap: 10px; }
-.contact a { color: var(--paper); font-family: var(--font-mono); font-size: 15px; display: flex; justify-content: space-between; border-bottom: 1px solid color-mix(in srgb, var(--paper) 30%, transparent); padding: 8px 0; text-decoration: none; }
-.contact a:hover { color: var(--copper); }
+.contact a { color: var(--paper); font-family: var(--font-mono); font-size: 15px; display: flex; justify-content: space-between; border-bottom: 1px solid color-mix(in srgb, var(--paper) 30%, transparent); padding: 8px 0; text-decoration: none; transition: color .2s, padding .3s var(--ease); }
+.contact a:hover { color: var(--copper); padding-left: 8px; }
+.contact kbd { font-family: var(--font-mono); font-size: 13px; border: 1px solid color-mix(in srgb, var(--paper) 50%, transparent); padding: 0 6px; }
 @media (max-width: 820px) { .contact { grid-template-columns: 1fr; padding: 24px 20px; } }
 
 footer { padding: 28px 0 40px; }
 footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+footer button.label { background: none; border: 0; padding: 0; cursor: pointer; }
+footer button.label:hover { color: var(--copper); }
+
+/* terminal: its own dark world in both themes */
+.term { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(5, 14, 28, .55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); overscroll-behavior: contain; }
+.term[hidden] { display: none; }
+.term-box { width: min(680px, 100%); height: min(440px, 80vh); display: flex; flex-direction: column; background: #071426; color: #cfe0f5; border: 1.5px solid #e5904a; box-shadow: 8px 8px 0 rgba(229, 144, 74, .35); font-family: var(--font-mono); font-size: 14px; animation: pop .22s var(--ease); }
+@keyframes pop { from { transform: translateY(12px) scale(.98); opacity: 0; } }
+.term-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #1d3a5f; }
+.term-head .label { color: #8fa7c4; }
+.term-x { background: none; border: 1px solid #2e5078; color: #cfe0f5; width: 28px; height: 28px; cursor: pointer; font-size: 16px; line-height: 1; }
+.term-x:hover { border-color: #e5904a; color: #e5904a; }
+.term-out { flex: 1; overflow-y: auto; padding: 12px 14px; white-space: pre-wrap; word-break: break-word; line-height: 1.55; }
+.term-out a { color: #e5904a; }
+.term-out .echo { color: #8fa7c4; }
+.term-out .acc { color: #e5904a; }
+.term-out .ok { color: #6cc38e; }
+.term-out .dim { color: #93a8c2; }
+.term-out .err { color: #ff8f8f; }
+.term-line { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid #1d3a5f; }
+.term-line .prompt { color: #e5904a; white-space: nowrap; }
+.term-line input { flex: 1; min-width: 0; background: transparent; border: 0; color: #e9f1fb; font: inherit; outline: none; caret-color: #e5904a; }
+.term-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 10px; }
+.term-chips button { background: none; border: 1px solid #2e5078; color: #cfe0f5; font: 12px var(--font-mono); padding: 3px 8px; cursor: pointer; }
+.term-chips button:hover { border-color: #e5904a; color: #e5904a; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .js .reveal:not(.in), .js .sheet-head:not(.in)::after, .js .timeline:not(.in)::before { transform: none; opacity: 1; }
+}
 </style>
 </head>
 <body>
 
+<div class="glow" id="glow" aria-hidden="true"></div>
 <a class="skip" href="#main">Skip to content</a>
 <header class="bar">
   <div class="wrap">
@@ -214,7 +340,12 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
       <a href="#experience">03 Experience</a>
       <a href="#contact">04 Contact</a>
     </nav>
+    <div class="tools">
+      <button type="button" class="tool" id="term-btn" aria-haspopup="dialog" aria-controls="term" title="Open the terminal (press /)"><span aria-hidden="true">&gt;_</span><span class="tl">Terminal</span></button>
+      <button type="button" class="tool" id="theme" aria-pressed="false" aria-label="Night mode" title="Switch day / night"><span class="knob" aria-hidden="true"></span><span class="tl t-label">Day</span></button>
+    </div>
   </div>
+  <span class="progress" id="progress" aria-hidden="true"></span>
 </header>
 
 <main id="main">
@@ -223,22 +354,27 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
       <div class="titleblock">
         <div class="tb-main">
           <span class="label">Engineer · Kochi, Kerala</span>
-          <h1>Omar Sheriff</h1>
+          <h1 id="name">Omar Sheriff</h1>
           <p class="role">ECE engineer building where <b>hardware meets AI</b>: embedded systems, edge models and the software around them.</p>
           <p class="intro">A rover that diagnoses tomato leaves, a sign-language translator that speaks with emotion, a prototype MRI cancer model squeezed onto an FPGA. Currently testing connected devices as a QA engineer at Transight.</p>
           <div class="cta">
-            <a class="btn primary" href="https://omarsheriffh-sentisign.hf.space" target="_blank" rel="noopener">Try SentiSign Live <span aria-hidden="true">↗</span></a>
-            <a class="btn" href="#projects">View Projects <span aria-hidden="true">↓</span></a>
-            <a class="btn" href="https://github.com/filaltaxi" target="_blank" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
-            <a class="btn" href="https://www.linkedin.com/in/omar-sheriff-h" target="_blank" rel="noopener">LinkedIn <span aria-hidden="true">↗</span></a>
+            <a class="btn primary" href="https://omarsheriffh-sentisign.hf.space" target="_blank" rel="noopener">Try SentiSign Live <span class="ar" aria-hidden="true">↗</span></a>
+            <a class="btn" href="#projects">View Projects <span class="ar down" aria-hidden="true">↓</span></a>
+            <a class="btn" href="https://github.com/filaltaxi" target="_blank" rel="noopener">GitHub <span class="ar" aria-hidden="true">↗</span></a>
+            <a class="btn" href="https://www.linkedin.com/in/omar-sheriff-h" target="_blank" rel="noopener">LinkedIn <span class="ar" aria-hidden="true">↗</span></a>
           </div>
         </div>
         <div class="tb-cells">
+          <div class="cell wide scope">
+            <div class="scope-head"><span class="label">Fig. 0 · Live circuit</span><span class="label" id="probe">hover · tap to fire</span></div>
+            <canvas id="circuit" role="img" aria-label="An animated circuit: signals travel from input pads through a chip to output lights. Move over it to probe a trace, tap to fire every input."></canvas>
+          </div>
           <div class="cell wide"><span class="label">Status</span><span class="v status"><span class="dot" aria-hidden="true"></span>Open to conversations</span></div>
           <div class="cell"><span class="label">Current role</span><span class="v">Associate QA Engineer</span></div>
           <div class="cell"><span class="label">Company</span><span class="v">Transight</span></div>
           <div class="cell"><span class="label">Degree</span><span class="v">B.Tech, ECE</span></div>
           <div class="cell"><span class="label">College</span><span class="v">RSET, Kochi</span></div>
+          <div class="cell wide"><span class="label">Signals routed through Fig. 0</span><span class="v" id="routed">0</span></div>
         </div>
       </div>
     </div>
@@ -253,9 +389,9 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           <p>My projects sit across the stack: ESP32 firmware and a custom KiCad motor board, on-device vision on a Raspberry Pi and an FPGA, browser-side ML, and a full-stack web app. I write down honest limits next to my results, because knowing what a system can’t do is part of engineering it.</p>
           <p>Outside work I tinker at maker spaces like TinkerSpace Kochi, laser-cut things in FreeCAD, and write on LinkedIn about education and learning in the age of AI.</p>
         </div>
-        <aside class="belief" aria-label="Working principle">
+        <aside class="belief reveal" aria-label="Working principle">
           <span class="label">Working principle</span>
-          <p class="eq">fundamentals <span>+</span> AI<br><span>&gt;</span> AI alone</p>
+          <p class="eq">fundamentals <span>+</span> AI<br><span>&gt;</span> AI alone<span class="cursor" aria-hidden="true"></span></p>
           <p style="margin:10px 0 0;font-size:15px;color:var(--muted)">If you don’t understand the fundamentals, you don’t know what to ask the AI. I use AI tools heavily, and I try to stay honest about what I understand versus what I’ve only shipped.</p>
         </aside>
       </div>
@@ -264,11 +400,11 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
 
   <section class="sheet" id="projects">
     <div class="wrap">
-      <div class="sheet-head"><span class="no">SHEET 02</span><h2>Projects</h2><span class="note">3 main builds · all on GitHub</span></div>
+      <div class="sheet-head"><span class="no">SHEET 02</span><h2>Projects</h2><span class="note">3 main builds · tap any signal flow</span></div>
 
       <div class="projects">
 
-        <article class="spec">
+        <article class="spec reveal">
           <div class="spec-top">
             <span class="pn">P-01</span>
             <h3 translate="no">SentiSign</h3>
@@ -289,25 +425,26 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
               <div class="row"><span class="k">Facial emotion, RAF-DB, 7 classes</span><span class="n">61.1%</span></div>
               <p class="hint">Runs on a free shared GPU that sleeps when idle. The first load can take about a minute.</p>
               <div class="links">
-                <a class="btn primary" href="https://omarsheriffh-sentisign.hf.space" target="_blank" rel="noopener">Try live demo <span aria-hidden="true">↗</span></a>
-                <a class="btn" href="https://github.com/filaltaxi/sentisign" target="_blank" rel="noopener">Code <span aria-hidden="true">↗</span></a>
+                <a class="btn primary" href="https://omarsheriffh-sentisign.hf.space" target="_blank" rel="noopener">Try live demo <span class="ar" aria-hidden="true">↗</span></a>
+                <a class="btn" href="https://github.com/filaltaxi/sentisign" target="_blank" rel="noopener">Code <span class="ar" aria-hidden="true">↗</span></a>
               </div>
             </div>
           </div>
           <div class="figs">
             <figure><img src="img/sentisign-results.png" width="1440" height="792" loading="lazy" alt="Bar chart: sign accuracy on unseen signers rises from 40.0% to 80.0% on 300 signs, 45.8% to 76.2% on 100 signs, and 46.4% to 71.3% on the official split when ASL Citizen data is added."><figcaption>Fig. 1 · Same model, more signers in the training data</figcaption></figure>
           </div>
-          <div class="flow" aria-label="Signal flow">
-            <span class="label">Signal flow</span>
-            <span class="blk">Webcam</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Hands · pose · face</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Sign + emotion models</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Sentence (LLM)</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Expressive speech</span>
+          <div class="flow" role="group" aria-label="SentiSign signal flow">
+            <button type="button" class="run">▶ Run signal</button>
+            <button type="button" class="blk" data-tip="Video stays in your browser. Nothing is uploaded; the camera feed is read frame by frame on your own device.">Webcam</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="MediaPipe finds hand, body and face landmarks: points, not pixels. Each hand becomes 216 numbers per frame describing handshape, location, movement and palm direction.">Hands · pose · face</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="A TCN + BiLSTM + attention model, running as ONNX in the browser, reads the signs: 80.0% on 300 signs from people it never saw. A second model reads emotion from 52 face blendshapes.">Sign + emotion models</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="Flan-T5 with LoRA turns sign glosses like YESTERDAY BUY APPLE into a natural sentence: I bought an apple yesterday! BLEU 78.5 on the test set.">Sentence (LLM)</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="Chatterbox speaks the sentence with matching emotion in about 1.4 s; Kokoro is the near-instant fallback.">Expressive speech</button>
           </div>
+          <p class="flow-tip" aria-live="polite">Tap any stage to see what it does, or run the signal.</p>
         </article>
 
-        <article class="spec">
+        <article class="spec reveal">
           <div class="spec-top">
             <span class="pn">P-02</span>
             <h3 translate="no">AgriRover 2.0</h3>
@@ -327,9 +464,9 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
               <div class="row"><span class="k">ESP32 telemetry rate</span><span class="n">20&nbsp;Hz</span></div>
               <div class="row"><span class="k">Bench bring-up tests</span><span class="n">8</span></div>
               <div class="links">
-                <a class="btn primary" href="https://filaltaxi.github.io/agrirover-sim/" target="_blank" rel="noopener">Try the Simulation <span aria-hidden="true">↗</span></a>
-                <a class="btn" href="https://github.com/filaltaxi/AgriRover" target="_blank" rel="noopener">Code <span aria-hidden="true">↗</span></a>
-                <a class="btn" href="https://youtu.be/qZ2BgCXhOP0" target="_blank" rel="noopener">v1 hardware video <span aria-hidden="true">↗</span></a>
+                <a class="btn primary" href="https://filaltaxi.github.io/agrirover-sim/" target="_blank" rel="noopener">Try the Simulation <span class="ar" aria-hidden="true">↗</span></a>
+                <a class="btn" href="https://github.com/filaltaxi/AgriRover" target="_blank" rel="noopener">Code <span class="ar" aria-hidden="true">↗</span></a>
+                <a class="btn" href="https://youtu.be/qZ2BgCXhOP0" target="_blank" rel="noopener">v1 hardware video <span class="ar" aria-hidden="true">↗</span></a>
               </div>
             </div>
           </div>
@@ -337,18 +474,19 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
             <figure><img src="img/agrirover-pcb.png" width="1440" height="1128" loading="lazy" alt="Top view of the ESP32 motor-controller board with front and back copper traces, two pin-header rows, a driver IC and screw terminals."><figcaption>Fig. 2 · Motor board, drawn from the KiCad file (copper pours not shown)</figcaption></figure>
             <figure><img src="img/agrirover-sim.png" width="1280" height="800" loading="lazy" alt="Mission replay screen: the rover's path along three rows of tomato plants, each marked healthy, needs review or diseased, with a plant log."><figcaption>Fig. 3 · Simulation replay: the real mission code on simulated hardware</figcaption></figure>
           </div>
-          <div class="flow" aria-label="Signal flow">
-            <span class="label">Signal flow</span>
-            <span class="blk">LiDAR row-follow</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">EKF localization</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Stop at plant</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Leaf detect</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Disease classify</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Tagged log</span>
+          <div class="flow" role="group" aria-label="AgriRover signal flow">
+            <button type="button" class="run">▶ Run signal</button>
+            <button type="button" class="blk" data-tip="The LiDAR measures the distance to the crop row on each side, so the rover keeps to the middle of the row.">LiDAR row-follow</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="An Extended Kalman Filter blends wheel encoders, the BNO055 IMU and GPS into one best guess of where the rover is.">EKF localization</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="The rover halts at each plant so the camera gets a still, sharp photo of the leaves.">Stop at plant</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="YOLO11n, exported to NCNN for the Raspberry Pi 5, finds the leaves in the photo.">Leaf detect</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="MobileNetV3 labels each leaf as healthy, needs review or diseased.">Disease classify</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="Every result is saved with the plant's position and shown on a Streamlit dashboard, so you can walk straight to a sick plant.">Tagged log</button>
           </div>
+          <p class="flow-tip" aria-live="polite">Tap any stage to see what it does, or run the signal.</p>
         </article>
 
-        <article class="spec">
+        <article class="spec reveal">
           <div class="spec-top">
             <span class="pn">P-03</span>
             <h3 translate="no">SegNet-Lite</h3>
@@ -367,25 +505,27 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
               <div class="row"><span class="k">Memory saved by INT8</span><span class="n">75%</span></div>
               <div class="row"><span class="k">bpMRI scans in dataset</span><span class="n">1,500</span></div>
               <div class="links">
-                <a class="btn primary" href="https://github.com/filaltaxi/SEGNET-LITE/blob/main/EXPLAINED.md" target="_blank" rel="noopener">Plain-language explainer <span aria-hidden="true">↗</span></a>
-                <a class="btn" href="https://github.com/filaltaxi/SEGNET-LITE" target="_blank" rel="noopener">Code <span aria-hidden="true">↗</span></a>
+                <a class="btn primary" href="https://github.com/filaltaxi/SEGNET-LITE/blob/main/EXPLAINED.md" target="_blank" rel="noopener">Plain-language explainer <span class="ar" aria-hidden="true">↗</span></a>
+                <a class="btn" href="https://github.com/filaltaxi/SEGNET-LITE/blob/main/BEGINNERS_GUIDE.md" target="_blank" rel="noopener">Full build guide <span class="ar" aria-hidden="true">↗</span></a>
+                <a class="btn" href="https://github.com/filaltaxi/SEGNET-LITE" target="_blank" rel="noopener">Code <span class="ar" aria-hidden="true">↗</span></a>
               </div>
             </div>
           </div>
-          <div class="flow" aria-label="Signal flow">
-            <span class="label">Signal flow</span>
-            <span class="blk">T2W · ADC · HBV MRI</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Find the prostate</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Zoom in, 64&nbsp;px</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Find the lesion</span><span class="arr" aria-hidden="true">→</span>
-            <span class="blk">Mask on FPGA</span>
+          <div class="flow" role="group" aria-label="SegNet-Lite signal flow">
+            <button type="button" class="run">▶ Run signal</button>
+            <button type="button" class="blk" data-tip="Three MRI views of the same slice, stacked like sheets of tracing paper: T2W shows the anatomy, ADC and HBV show how freely water moves.">T2W · ADC · HBV MRI</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="Stage 1 runs on the FPGA and outlines the prostate gland on a 192 × 192 picture.">Find the prostate</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="A 64 × 64 window is cut from the area of interest, so the rest of the pelvis cannot cause false alarms.">Zoom in, 64&nbsp;px</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="Stage 2, an INT8 model on the FPGA’s DPU, colours in every pixel in the window that looks like cancer.">Find the lesion</button><span class="arr" aria-hidden="true">→</span>
+            <button type="button" class="blk" data-tip="The coloured-in mask comes back in under 20 ms of chip time, for a radiologist to check. No scan leaves the hospital.">Mask on FPGA</button>
           </div>
+          <p class="flow-tip" aria-live="polite">Tap any stage to see what it does, or run the signal.</p>
         </article>
 
       </div>
 
       <div class="minor">
-        <div class="mini"><span class="label">Also built · web app</span><h4 translate="no">Ayal</h4><p>A neighbourhood skills board piloting in Kaloor, Kochi. Neighbours list what they’re good at and chat in-app without sharing phone numbers. Next.js, Supabase, Postgres row-level security, PostGIS. <a href="https://github.com/filaltaxi/AYAL" target="_blank" rel="noopener">Code <span aria-hidden="true">↗</span></a></p></div>
+        <div class="mini reveal"><span class="label">Also built · web app</span><h4 translate="no">Ayal</h4><p>A neighbourhood skills board piloting in Kaloor, Kochi. Neighbours list what they’re good at and chat in-app without sharing phone numbers. Next.js, Supabase, Postgres row-level security, PostGIS. <a href="https://github.com/filaltaxi/AYAL" target="_blank" rel="noopener">Code <span aria-hidden="true">↗</span></a></p></div>
       </div>
     </div>
   </section>
@@ -402,13 +542,13 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
     </div>
   </section>
 
-<section class="sheet" id="contact">
+  <section class="sheet" id="contact">
     <div class="wrap">
-      <div class="contact">
+      <div class="contact reveal">
         <div>
           <span class="label" style="color:inherit;opacity:.7">SHEET 04 · Contact</span>
           <h2>Let’s Build Something That Works on the Bench and in the Field</h2>
-          <p>Based in Kochi. The quickest way to reach me is a LinkedIn message.</p>
+          <p>Based in Kochi. The quickest way to reach me is a LinkedIn message. Or press <kbd>/</kbd> and type <kbd>help</kbd>.</p>
         </div>
         <div class="links">
           <a href="https://www.linkedin.com/in/omar-sheriff-h" target="_blank" rel="noopener"><span>LinkedIn</span><span>/in/omar-sheriff-h <span aria-hidden="true">↗</span></span></a>
@@ -422,9 +562,422 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
 
 <footer>
   <div class="wrap">
-    <span class="label">Drawn by O. Sheriff · Kochi · Rev B · Nov 2026</span>
+    <span class="label">Drawn by O. Sheriff · Kochi · Rev C · Nov 2026</span>
+    <button type="button" class="label" id="foot-term">Press / for the terminal</button>
   </div>
 </footer>
 
+<div class="term" id="term" role="dialog" aria-modal="true" aria-labelledby="term-title" hidden>
+  <div class="term-box">
+    <div class="term-head"><span class="label" id="term-title">omar@portfolio: ~</span><button type="button" class="term-x" id="term-close" aria-label="Close terminal">×</button></div>
+    <div class="term-out" id="term-out" aria-live="polite"></div>
+    <div class="term-chips" aria-label="Quick commands">
+      <button type="button" data-cmd="help">help</button>
+      <button type="button" data-cmd="ls">ls</button>
+      <button type="button" data-cmd="sentisign">sentisign</button>
+      <button type="button" data-cmd="sim">sim</button>
+      <button type="button" data-cmd="theme">theme</button>
+      <button type="button" data-cmd="sudo hire omar">sudo hire omar</button>
+    </div>
+    <form class="term-line" id="term-form"><label class="prompt" for="term-in">omar@portfolio:~$</label><input id="term-in" name="cmd" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go"></form>
+  </div>
+</div>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const store = {
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+
+  /* ---------- day / night ---------- */
+  const sysDark = matchMedia('(prefers-color-scheme: dark)');
+  const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : sysDark.matches;
+  const themeBtn = document.getElementById('theme');
+  const themeMetas = document.querySelectorAll('meta[name="theme-color"]');
+  const themeHooks = [];
+  function syncTheme() {
+    const d = isDark();
+    themeBtn.setAttribute('aria-pressed', String(d));
+    themeBtn.querySelector('.t-label').textContent = d ? 'Night' : 'Day';
+    const bg = getComputedStyle(root).getPropertyValue('--paper').trim();
+    themeMetas.forEach(m => m.setAttribute('content', bg));
+    themeHooks.forEach(f => f());
+  }
+  themeBtn.addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    store.set('os-theme', next);
+    syncTheme();
+  });
+  sysDark.addEventListener('change', syncTheme);
+
+  /* ---------- name letters ---------- */
+  const h1 = document.getElementById('name');
+  if (h1 && !reduce) {
+    const text = h1.textContent; let i = 0;
+    h1.setAttribute('aria-label', text);
+    h1.textContent = '';
+    text.split(' ').forEach((word, wi) => {
+      const w = document.createElement('span'); w.className = 'w'; w.setAttribute('aria-hidden', 'true');
+      [...word].forEach(c => { const s = document.createElement('span'); s.className = 'ch'; s.style.setProperty('--i', i++); s.textContent = c; w.append(s); });
+      if (wi) h1.append(' ');
+      h1.append(w);
+    });
+  }
+
+  /* ---------- cursor glow + scroll trace ---------- */
+  const glow = document.getElementById('glow');
+  if (fine && !reduce) {
+    addEventListener('pointermove', e => {
+      glow.style.setProperty('--mx', e.clientX + 'px');
+      glow.style.setProperty('--my', e.clientY + 'px');
+      root.classList.add('glowing');
+    }, { passive: true });
+    document.addEventListener('pointerleave', () => root.classList.remove('glowing'));
+  }
+  const prog = document.getElementById('progress');
+  const onScroll = () => {
+    const h = root.scrollHeight - innerHeight;
+    prog.style.transform = `scaleX(${h > 0 ? Math.min(1, scrollY / h) : 0})`;
+  };
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- active section in the nav ---------- */
+  const links = [...document.querySelectorAll('.bar nav a')];
+  const navIO = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) links.forEach(a => a.setAttribute('aria-current', String(a.getAttribute('href') === '#' + e.target.id)));
+  }), { rootMargin: '-45% 0px -50% 0px' });
+  ['about', 'projects', 'experience', 'contact'].forEach(id => navIO.observe(document.getElementById(id)));
+
+  /* ---------- count-ups ---------- */
+  function countUp(el) {
+    if (reduce) return;
+    const txt = el.textContent;
+    if (/\d\s*[–-]\s*\d/.test(txt)) return;
+    const m = txt.match(/\d[\d,]*(\.\d+)?/);
+    if (!m) return;
+    const target = parseFloat(m[0].replace(/,/g, ''));
+    const dec = m[1] ? m[1].length - 1 : 0;
+    const comma = m[0].includes(',');
+    const pre = txt.slice(0, m.index), post = txt.slice(m.index + m[0].length);
+    const fmt = v => pre + (comma ? v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }) : v.toFixed(dec)) + post;
+    const t0 = performance.now(), dur = 1200;
+    const step = now => {
+      const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = p < 1 ? fmt(target * e) : txt;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  /* ---------- clickable signal flows ---------- */
+  document.querySelectorAll('.flow').forEach(flow => {
+    const blks = [...flow.querySelectorAll('.blk')];
+    const arrs = [...flow.querySelectorAll('.arr')];
+    const tip = flow.nextElementSibling;
+    const run = flow.querySelector('.run');
+    let timers = [];
+    const clear = () => { timers.forEach(clearTimeout); timers = []; };
+    const paint = (k, cur) => {
+      blks.forEach((b, i) => { b.classList.toggle('on', i <= k); b.classList.toggle('cur', i === cur); b.setAttribute('aria-pressed', String(i === cur)); });
+      arrs.forEach((a, i) => a.classList.toggle('lit', i < k));
+    };
+    const show = i => {
+      tip.textContent = '';
+      const s = document.createElement('strong'); s.textContent = `${i + 1}/${blks.length} · ${blks[i].textContent}: `;
+      tip.append(s, blks[i].dataset.tip);
+      tip.classList.remove('fresh'); void tip.offsetWidth; tip.classList.add('fresh');
+    };
+    const sweep = (to, cur, gap) => {
+      clear(); paint(-1, -1);
+      for (let k = 0; k <= to; k++) timers.push(setTimeout(() => paint(k, k === to ? cur : -1), reduce ? 0 : k * gap));
+    };
+    blks.forEach((b, i) => b.addEventListener('click', () => { show(i); sweep(i, i, 110); }));
+    run.addEventListener('click', () => {
+      clear(); paint(-1, -1);
+      blks.forEach((b, i) => timers.push(setTimeout(() => { paint(i, i); show(i); }, reduce ? 0 : i * 1500)));
+    });
+    flow.autoSweep = () => sweep(blks.length - 1, -1, 190);
+  });
+
+  /* ---------- reveal on scroll ---------- */
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    const el = e.target;
+    el.classList.add('in');
+    io.unobserve(el);
+    if (el.classList.contains('n')) countUp(el);
+    if (el.autoSweep) el.autoSweep();
+  }), { threshold: .15, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.sheet-head, .reveal, .timeline, .row .n, .flow').forEach(el => io.observe(el));
+
+  /* ---------- live circuit ---------- */
+  const cv = document.getElementById('circuit');
+  const routedEl = document.getElementById('routed');
+  const probeEl = document.getElementById('probe');
+  const probeIdle = probeEl.textContent;
+  const ctx = cv.getContext('2d');
+  let W = 0, H = 0, paths = [], pulses = [], leds = [], chip = null, mouse = null, hot = -1;
+  let flash = 0, routed = 0, spawnT = 0, raf = 0, last = 0, onScreen = true;
+  const col = {};
+  const readCol = () => { const cs = getComputedStyle(root); ['ink', 'muted', 'line', 'copper', 'ok', 'panel'].forEach(k => { col[k] = cs.getPropertyValue('--' + k).trim(); }); };
+  const snap = v => Math.round(v / 12) * 12;
+  const mk = (pts, kind, n) => {
+    const segs = []; let len = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts.at(i - 1), b = pts.at(i), l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      segs.push({ x0: a[0], y0: a[1], x1: b[0], y1: b[1], l, s: len }); len += l;
+    }
+    return { pts, segs, len, kind, n };
+  };
+  function build() {
+    const r = cv.getBoundingClientRect();
+    W = r.width; H = r.height;
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cw = Math.max(84, Math.min(112, W * .26)), ch = Math.min(88, H * .44);
+    const cx = snap(W * .5), cy = snap(H * .5);
+    chip = { x: cx - cw / 2, y: cy - ch / 2, w: cw, h: ch };
+    paths = []; leds = [];
+    const pad = 20, nIn = 5, nOut = 4;
+    for (let i = 0; i < nIn; i++) {
+      const py = snap(H * (.12 + .76 * i / (nIn - 1)));
+      const pin = snap(chip.y + ch * (.14 + .72 * i / (nIn - 1)));
+      const mx = snap(pad + (chip.x - pad) * (.3 + .1 * ((i * 3) % 5)));
+      paths.push(mk([[pad, py], [mx, py], [mx, pin], [chip.x, pin]], 'in', i + 1));
+    }
+    for (let j = 0; j < nOut; j++) {
+      const ly = snap(H * (.18 + .64 * j / (nOut - 1)));
+      const pin = snap(chip.y + ch * (.2 + .6 * j / (nOut - 1)));
+      const ex = W - pad, sx = chip.x + cw;
+      const mx = snap(sx + (ex - sx) * (.3 + .12 * ((j * 2) % 4)));
+      paths.push(mk([[sx, pin], [mx, pin], [mx, ly], [ex, ly]], 'out', j + 1));
+      leds.push({ x: ex, y: ly, v: 0 });
+    }
+  }
+  const at = (p, d) => {
+    d = Math.max(0, Math.min(p.len, d));
+    for (const s of p.segs) if (d <= s.s + s.l) { const t = s.l ? (d - s.s) / s.l : 0; return [s.x0 + (s.x1 - s.x0) * t, s.y0 + (s.y1 - s.y0) * t]; }
+    const s = p.segs.at(-1); return [s.x1, s.y1];
+  };
+  const distSeg = (px, py, s) => {
+    const dx = s.x1 - s.x0, dy = s.y1 - s.y0, l2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((px - s.x0) * dx + (py - s.y0) * dy) / l2));
+    return Math.hypot(px - (s.x0 + dx * t), py - (s.y0 + dy * t));
+  };
+  const ins = () => paths.filter(p => p.kind === 'in');
+  const outs = () => paths.filter(p => p.kind === 'out');
+  const pick = a => a.at(Math.floor(Math.random() * a.length));
+  const fire = p => pulses.push({ p, d: 0, v: 130 + Math.random() * 70 });
+  const bump = () => { routed++; routedEl.textContent = routed.toLocaleString('en-US'); };
+  function update(dt) {
+    spawnT -= dt;
+    if (spawnT <= 0) {
+      spawnT = hot >= 0 ? .16 : .6;
+      const h = hot >= 0 ? paths.at(hot) : null;
+      fire(h && h.kind === 'in' ? h : pick(ins()));
+    }
+    pulses.forEach(u => { u.d += u.v * dt; });
+    const done = pulses.filter(u => u.d >= u.p.len);
+    pulses = pulses.filter(u => u.d < u.p.len);
+    done.forEach(u => {
+      if (u.p.kind === 'in') {
+        flash = 1;
+        const h = hot >= 0 ? paths.at(hot) : null;
+        fire(h && h.kind === 'out' ? h : pick(outs()));
+      } else {
+        const led = leds.at(u.p.n - 1); if (led) led.v = 1;
+        bump();
+      }
+    });
+    flash = Math.max(0, flash - dt * 3);
+    leds.forEach(l => { l.v = Math.max(0, l.v - dt * 1.5); });
+  }
+  function draw() {
+    if (!chip) return;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = col.line; ctx.globalAlpha = .5;
+    for (let x = 12; x < W; x += 24) for (let y = 12; y < H; y += 24) ctx.fillRect(x - .75, y - .75, 1.5, 1.5);
+    ctx.globalAlpha = 1; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    paths.forEach((p, i) => {
+      ctx.strokeStyle = i === hot ? col.copper : col.line; ctx.lineWidth = i === hot ? 3 : 2;
+      ctx.beginPath(); p.pts.forEach((pt, k) => k ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1])); ctx.stroke();
+    });
+    ins().forEach(p => {
+      const x = p.pts[0][0], y = p.pts[0][1];
+      ctx.fillStyle = col.panel; ctx.fillRect(x - 6, y - 6, 12, 12);
+      ctx.strokeStyle = col.ink; ctx.lineWidth = 1.5; ctx.strokeRect(x - 6, y - 6, 12, 12);
+    });
+    pulses.forEach(u => {
+      ctx.fillStyle = col.copper;
+      for (let k = 7; k >= 0; k--) {
+        const pt = at(u.p, u.d - k * 4);
+        ctx.globalAlpha = 1 - k / 8;
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], k ? 2.2 : 3.6, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    });
+    const c = chip;
+    ctx.fillStyle = col.panel; ctx.fillRect(c.x, c.y, c.w, c.h);
+    if (flash > 0) { ctx.globalAlpha = flash * .3; ctx.fillStyle = col.copper; ctx.fillRect(c.x, c.y, c.w, c.h); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = col.ink; ctx.lineWidth = 2; ctx.strokeRect(c.x, c.y, c.w, c.h);
+    ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let x = c.x + 10; x < c.x + c.w - 6; x += 12) { ctx.moveTo(x, c.y); ctx.lineTo(x, c.y - 5); ctx.moveTo(x, c.y + c.h); ctx.lineTo(x, c.y + c.h + 5); }
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(c.x + 9, c.y + 9, 2.5, 0, Math.PI * 2); ctx.fillStyle = col.ink; ctx.fill();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '600 13px "IBM Plex Mono", monospace'; ctx.fillText('OS-01', c.x + c.w / 2, c.y + c.h / 2 - 7);
+    ctx.fillStyle = col.muted; ctx.font = '10px "IBM Plex Mono", monospace'; ctx.fillText('HW + AI', c.x + c.w / 2, c.y + c.h / 2 + 10);
+    leds.forEach(l => {
+      ctx.beginPath(); ctx.arc(l.x, l.y, 6, 0, Math.PI * 2); ctx.fillStyle = col.panel; ctx.fill();
+      if (l.v > 0) {
+        ctx.globalAlpha = l.v; ctx.fillStyle = col.ok; ctx.fill();
+        ctx.globalAlpha = l.v * .22; ctx.beginPath(); ctx.arc(l.x, l.y, 14, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+      }
+      ctx.beginPath(); ctx.arc(l.x, l.y, 6, 0, Math.PI * 2); ctx.strokeStyle = col.ink; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+    if (mouse) {
+      ctx.strokeStyle = col.copper; ctx.lineWidth = 1; ctx.globalAlpha = .55; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(mouse.x, 0); ctx.lineTo(mouse.x, H); ctx.moveTo(0, mouse.y); ctx.lineTo(W, mouse.y); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(mouse.x, mouse.y, 6, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  function frame(t) {
+    raf = 0;
+    if (!onScreen || document.hidden) { last = 0; return; }
+    const dt = last ? Math.min(.05, (t - last) / 1000) : 0; last = t;
+    update(dt); draw();
+    raf = requestAnimationFrame(frame);
+  }
+  const start = () => { if (!raf && !reduce) raf = requestAnimationFrame(frame); };
+  readCol(); build(); draw();
+  themeHooks.push(() => { readCol(); draw(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+  new ResizeObserver(() => { build(); draw(); }).observe(cv);
+  new IntersectionObserver(es => { onScreen = es[0].isIntersecting; if (onScreen) start(); }).observe(cv);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) start(); });
+  cv.addEventListener('pointermove', e => {
+    const r = cv.getBoundingClientRect();
+    mouse = { x: e.clientX - r.left, y: e.clientY - r.top };
+    let best = -1, bd = 18;
+    paths.forEach((p, i) => p.segs.forEach(s => { const d = distSeg(mouse.x, mouse.y, s); if (d < bd) { bd = d; best = i; } }));
+    hot = best;
+    if (hot >= 0) { const p = paths.at(hot); probeEl.textContent = p.kind === 'in' ? `probe: input ${p.n} → OS-01` : `probe: OS-01 → LED ${p.n}`; }
+    else probeEl.textContent = `x ${Math.round(mouse.x)} · y ${Math.round(mouse.y)}`;
+    if (reduce) draw();
+  });
+  cv.addEventListener('pointerleave', () => { mouse = null; hot = -1; probeEl.textContent = probeIdle; if (reduce) draw(); });
+  cv.addEventListener('pointerdown', () => {
+    if (reduce) { leds.forEach(l => { l.v = 1; bump(); }); draw(); leds.forEach(l => { l.v = 0; }); return; }
+    ins().forEach(fire);
+  });
+  syncTheme();
+
+  /* ---------- terminal ---------- */
+  const term = document.getElementById('term');
+  const out = document.getElementById('term-out');
+  const inp = document.getElementById('term-in');
+  const xBtn = document.getElementById('term-close');
+  let lastFocus = null, hist = [], hi = 0;
+  const line = (parts, cls) => {
+    const d = document.createElement('div'); if (cls) d.className = cls;
+    parts.forEach(p => d.append(typeof p === 'string' ? document.createTextNode(p) : p));
+    out.append(d); out.scrollTop = out.scrollHeight;
+  };
+  const link = (href, text) => { const a = document.createElement('a'); a.href = href; a.textContent = text; a.target = '_blank'; a.rel = 'noopener'; return a; };
+  const go = id => { closeTerm(); document.getElementById(id).scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' }); };
+  const help = [
+    ['whoami', 'who built this'], ['about', 'jump to About'], ['ls', 'list projects'],
+    ['sentisign', 'sign language to speech'], ['agrirover', 'tomato-disease rover'], ['sim', 'open the rover simulation'],
+    ['segnet', 'MRI model on an FPGA'], ['ayal', 'neighbourhood skills app'], ['experience', 'jump to Experience'],
+    ['contact', 'how to reach me'], ['theme', 'flip day / night'], ['clear', 'clear the screen'], ['exit', 'close the terminal']
+  ];
+  const cmds = {
+    help: () => { line(['Commands:'], 'acc'); help.forEach(h => line(['  ' + h[0].padEnd(12, ' ') + h[1]], 'dim')); line(['Tip: Tab completes, ↑ ↓ go through history.'], 'dim'); },
+    whoami: () => line(['Omar Sheriff · ECE engineer in Kochi, building where hardware meets AI. Associate QA Engineer at Transight.']),
+    about: () => go('about'),
+    ls: () => line(['sentisign/   agrirover/   segnet/   ayal/'], 'acc'),
+    projects: () => go('projects'),
+    sentisign: () => {
+      line(['SentiSign · webcam → signs + emotion → sentence → expressive speech. 80.0% on 300 signs from unseen signers.']);
+      line(['→ ', link('https://omarsheriffh-sentisign.hf.space', 'live demo'), '   ', link('https://github.com/filaltaxi/sentisign', 'code')]);
+    },
+    agrirover: () => {
+      line(['AgriRover 2.0 · LiDAR row-following rover that photographs each tomato plant and flags disease. Custom KiCad motor board.']);
+      line(['→ ', link('https://filaltaxi.github.io/agrirover-sim/', 'simulation'), '   ', link('https://github.com/filaltaxi/AgriRover', 'code')]);
+    },
+    sim: () => line(['→ ', link('https://filaltaxi.github.io/agrirover-sim/', 'open the AgriRover mission replay')]),
+    segnet: () => {
+      line(['SegNet-Lite · two small models find prostate lesions on MRI, INT8 on a ZCU104 FPGA, under 20 ms per scan. Research prototype.']);
+      line(['→ ', link('https://github.com/filaltaxi/SEGNET-LITE/blob/main/BEGINNERS_GUIDE.md', 'beginner’s guide'), '   ', link('https://github.com/filaltaxi/SEGNET-LITE', 'code')]);
+    },
+    ayal: () => { line(['Ayal · skills from people next door. Next.js + Supabase pilot in Kaloor, Kochi.']); line(['→ ', link('https://github.com/filaltaxi/AYAL', 'code')]); },
+    experience: () => go('experience'),
+    contact: () => line(['→ ', link('https://www.linkedin.com/in/omar-sheriff-h', 'LinkedIn'), '   ', link('https://github.com/filaltaxi', 'GitHub')]),
+    theme: () => { themeBtn.click(); line([`theme: ${isDark() ? 'night' : 'day'}`], 'dim'); },
+    clear: () => { out.textContent = ''; },
+    exit: () => closeTerm(),
+    date: () => line([new Date().toDateString()]),
+    'sudo hire omar': () => { line(['[sudo] access granted. Excellent choice.'], 'ok'); line(['→ ', link('https://www.linkedin.com/in/omar-sheriff-h', 'send Omar a message on LinkedIn')]); }
+  };
+  const alias = { close: 'exit', quit: 'exit', 'cd projects': 'ls', dir: 'ls', hire: 'sudo hire omar', 'hire omar': 'sudo hire omar', segnetlite: 'segnet', 'segnet-lite': 'segnet', email: 'contact' };
+  function exec(raw) {
+    const c0 = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!c0) return;
+    line(['$ ' + raw], 'echo');
+    hist.push(raw); hi = hist.length;
+    const c = alias[c0] || c0;
+    if (Object.prototype.hasOwnProperty.call(cmds, c)) cmds[c]();
+    else if (c.startsWith('sudo')) line(['sudo: only one sudo works here. Try: sudo hire omar'], 'err');
+    else line([`command not found: ${raw.trim()}. Type help.`], 'err');
+  }
+  function openTerm() {
+    if (!term.hidden) return;
+    lastFocus = document.activeElement;
+    term.hidden = false;
+    if (!out.childElementCount) { line(['OmarOS 1.0 · blueprint shell'], 'acc'); line(['Type help, or tap a command below.'], 'dim'); }
+    inp.focus();
+  }
+  function closeTerm() {
+    if (term.hidden) return;
+    term.hidden = true;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  document.getElementById('term-btn').addEventListener('click', openTerm);
+  document.getElementById('foot-term').addEventListener('click', openTerm);
+  xBtn.addEventListener('click', closeTerm);
+  term.addEventListener('click', e => { if (e.target === term) closeTerm(); });
+  term.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => { exec(b.dataset.cmd); inp.focus(); }));
+  document.getElementById('term-form').addEventListener('submit', e => { e.preventDefault(); exec(inp.value); inp.value = ''; });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp' && hist.length) { e.preventDefault(); hi = Math.max(0, hi - 1); inp.value = hist.at(hi); }
+    else if (e.key === 'ArrowDown' && hist.length) { e.preventDefault(); hi = Math.min(hist.length, hi + 1); inp.value = hi < hist.length ? hist.at(hi) : ''; }
+    else if (e.key === 'Tab' && !e.shiftKey && inp.value.trim()) {
+      const v = inp.value.trim().toLowerCase();
+      const m = Object.keys(cmds).filter(k => k.startsWith(v));
+      if (m.length) { e.preventDefault(); if (m.length === 1) inp.value = m[0]; else line([m.join('   ')], 'dim'); }
+    }
+  });
+  term.addEventListener('keydown', e => {
+    if (e.key !== 'Tab') return;
+    const f = [...term.querySelectorAll('button, input')];
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f.at(-1).focus(); }
+    else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !term.hidden) { closeTerm(); return; }
+    if ((e.key === '/' || e.key === '`') && !e.ctrlKey && !e.metaKey && !e.altKey && term.hidden && !e.target.closest('input, textarea, select, [contenteditable]')) {
+      e.preventDefault(); openTerm();
+    }
+  });
+})();
+</script>
 </body>
 </html>
